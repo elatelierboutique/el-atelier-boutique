@@ -3,6 +3,7 @@ const WA = "573147693962";
 let products = [], activeCat = "Todos";
 let cart = JSON.parse(localStorage.getItem("atelierCartV4") || "[]");
 let currentProduct = null, selectedSize = "", selectedColor = "", modalQty = 1, currentImageIndex = 0;
+const imgUrl = p => (String(p||"").startsWith("http") ? p : "/static/"+p);
 const money = n => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n);
 const $ = sel => document.querySelector(sel);
 
@@ -25,7 +26,7 @@ function renderProducts(){
   $("#productGrid").innerHTML=list.map(p=>`
     <article class="productCard" onclick="openProduct(${p.id})">
       <div class="productImage">
-        <img src="/static/${p.image}" alt="${p.name}">
+        <img src="${imgUrl(p.image)}" alt="${p.name}">
         ${p.featured?'<span class="newTag">NUEVO</span>':''}
       </div>
       <div class="productInfo">
@@ -66,11 +67,11 @@ function gallery(){
 }
 function renderGallery(){
   const g=gallery();
-  $("#modalMainImage").src="/static/"+g[currentImageIndex].image;
+  $("#modalMainImage").src=imgUrl(g[currentImageIndex].image);
   $("#modalMainImage").onclick=openLightbox;
   $("#modalThumbs").innerHTML=g.map((img,i)=>`
     <button class="thumb ${i===currentImageIndex?'active':''}" onclick="pickImage(${i})">
-      <img src="/static/${img.image}">
+      <img src="${imgUrl(img.image)}">
       ${img.color?`<span>${img.color}</span>`:""}
     </button>`).join("");
 }
@@ -79,7 +80,7 @@ function renderRelated(){
   const list=products.filter(p=>p.id!==currentProduct.id).slice(0,4);
   $("#relatedProducts").innerHTML=list.map(p=>`
     <article class="related-card" onclick="openProduct(${p.id})">
-      <img src="/static/${p.image}">
+      <img src="${imgUrl(p.image)}">
       <h4>${p.name}</h4>
       <span>${money(p.price)}</span>
     </article>`).join("");
@@ -99,11 +100,11 @@ function openLightbox(){
 }
 function renderLightbox(){
   const g=gallery(),item=g[currentImageIndex];
-  $("#lightboxImage").src="/static/"+item.image;
+  $("#lightboxImage").src=imgUrl(item.image);
   $("#lightColor").textContent=item.color||currentProduct.name;
   $("#lightCounter").textContent=`${currentImageIndex+1} / ${g.length}`;
   $("#lightboxThumbs").innerHTML=g.map((img,i)=>`
-    <button class="lightboxThumb ${i===currentImageIndex?'active':''}" onclick="lightPick(${i})"><img src="/static/${img.image}"></button>`).join("");
+    <button class="lightboxThumb ${i===currentImageIndex?'active':''}" onclick="lightPick(${i})"><img src="${imgUrl(img.image)}"></button>`).join("");
 }
 window.lightPick=i=>{currentImageIndex=i;renderLightbox();renderGallery()}
 $("#closeLightbox").onclick=()=>$("#lightbox").classList.remove("open");
@@ -126,7 +127,7 @@ function renderCart(){
   $("#stickyCountText").textContent=`${count} producto${count===1?"":"s"}`;
   const total=cart.reduce((sum,i)=>{const p=products.find(x=>x.id===i.id);return sum+(p?p.price*i.qty:0)},0);
   $("#stickyTotal").textContent=money(total);
-  $("#stickyThumbs").innerHTML=cart.slice(0,5).map(i=>{const p=products.find(x=>x.id===i.id);return p?`<img src="/static/${p.image}">`:""}).join("");
+  $("#stickyThumbs").innerHTML=cart.slice(0,5).map(i=>{const p=products.find(x=>x.id===i.id);return p?`<img src="${imgUrl(p.image)}">`:""}).join("");
 
   if(!cart.length){
     $("#cartItems").innerHTML="";
@@ -138,7 +139,7 @@ function renderCart(){
   $("#cartFormWrap").classList.remove("hidden");
   $("#cartItems").innerHTML=cart.map(i=>{const p=products.find(x=>x.id===i.id);if(!p)return"";return`
     <div class="cartItem">
-      <img src="/static/${p.image}">
+      <img src="${imgUrl(p.image)}">
       <div><h4>${p.name}</h4><p>${p.ref} · ${i.size} · ${i.color}</p>
       <div class="qtyLine"><button onclick="chg('${i.key}',-1)">−</button><b>${i.qty}</b><button onclick="chg('${i.key}',1)">+</button><button class="remove" onclick="delItem('${i.key}')">Quitar</button></div></div>
       <b>${money(p.price*i.qty)}</b>

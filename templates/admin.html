@@ -3,6 +3,9 @@
 <body>
 <header class="adminHeader"><div><b>El Atelier · Admin</b><small>Catálogo, colores y galería</small></div><div><a href="/" target="_blank">Ver tienda</a><a href="/admin/logout">Salir</a></div></header>
 <main class="adminMain">
+<div class="storageStatus"><b>Almacenamiento:</b> {{ storage_mode }}{% if supabase_ready %}<span class="ok">✓ Permanente configurado</span>{% else %}<span class="warn">⚠ En Render los cambios locales pueden perderse</span>{% endif %}</div>
+{% if supabase_ready %}<form method="post" action="/admin/migrate-local-to-supabase" onsubmit="return confirm('¿Migrar el catálogo actual a Supabase?')"><button class="migrateBtn">Migrar catálogo actual a almacenamiento permanente</button></form>{% endif %}
+
 {% with messages=get_flashed_messages() %}{% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}{% endwith %}
 
 <section class="panel">
@@ -31,7 +34,7 @@
 <div class="adminGallery">
 {% for img in p.gallery %}
   <label class="galleryItem">
-    <img src="{{ url_for('static', filename=img.image) }}">
+    {% if img.image.startswith('http') %}<img src="{{ img.image }}">{% else %}<img src="{{ url_for('static', filename=img.image) }}">{% endif %}
     <span>{{ img.color or 'Sin color' }}</span>
     <small><input type="checkbox" name="noop" disabled> Imagen actual</small>
   </label>

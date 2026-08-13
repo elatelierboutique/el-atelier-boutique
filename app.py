@@ -1,249 +1,229 @@
-
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.utils import secure_filename
 from functools import wraps
 from pathlib import Path
-import sqlite3, os, json, uuid
+import sqlite3, os, json, uuid, mimetypes
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "atelier.db"
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
+DB_PATH = BASE_DIR / 'atelier.db'
+UPLOAD_DIR = BASE_DIR / 'static' / 'uploads'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("ATELIER_SECRET_KEY", "atelier-v3-cambiar-en-produccion")
+app.secret_key = os.environ.get('ATELIER_SECRET_KEY', 'atelier-v4-1-local')
+ADMIN_USER = os.environ.get('ATELIER_ADMIN_USER', 'admin')
+ADMIN_PASSWORD = os.environ.get('ATELIER_ADMIN_PASSWORD', 'Atelier2026!')
 
-ADMIN_USER = os.environ.get("ATELIER_ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.environ.get("ATELIER_ADMIN_PASSWORD", "Atelier2026!")
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '').strip()
+SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '').strip()
+SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'product-images').strip()
+USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
+sb = None
+if USE_SUPABASE:
+    from supabase import create_client
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    c = sqlite3.connect(DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c
 
 def init_db():
-    conn = get_db()
-    conn.executescript("""
+    c = get_db()
+    c.executescript('''
     CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ref TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        subtitle TEXT DEFAULT '',
-        description TEXT DEFAULT '',
-        price INTEGER NOT NULL,
-        category TEXT NOT NULL DEFAULT 'Ropa',
-        sizes TEXT DEFAULT '[]',
-        colors TEXT DEFAULT '[]',
-        image TEXT DEFAULT '',
-        active INTEGER DEFAULT 1,
-        featured INTEGER DEFAULT 1
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+      subtitle TEXT DEFAULT '', description TEXT DEFAULT '', price INTEGER NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Ropa', sizes TEXT DEFAULT '[]', colors TEXT DEFAULT '[]',
+      image TEXT DEFAULT '', active INTEGER DEFAULT 1, featured INTEGER DEFAULT 1
     );
-
     CREATE TABLE IF NOT EXISTS product_images (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER NOT NULL,
-        image TEXT NOT NULL,
-        color TEXT DEFAULT '',
-        sort_order INTEGER DEFAULT 0,
-        is_primary INTEGER DEFAULT 0,
-        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
-    );
-    """)
-    # Seed gallery table from legacy main image when absent.
-    products = conn.execute("SELECT id, image FROM products").fetchall()
-    for p in products:
-        c = conn.execute("SELECT COUNT(*) c FROM product_images WHERE product_id=?", (p["id"],)).fetchone()["c"]
-        if c == 0 and p["image"]:
-            conn.execute(
-                "INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,1)",
-                (p["id"], p["image"], "", 0)
-            )
-    conn.commit()
-    conn.close()
+      id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, image TEXT NOT NULL,
+      color TEXT DEFAULT '', sort_order INTEGER DEFAULT 0, is_primary INTEGER DEFAULT 0
+    );''')
+    for p in c.execute('SELECT id,image FROM products').fetchall():
+        n = c.execute('SELECT COUNT(*) c FROM product_images WHERE product_id=?',(p['id'],)).fetchone()['c']
+        if n == 0 and p['image']:
+            c.execute('INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,1)',(p['id'],p['image'],'',0))
+    c.commit(); c.close()
 
-def product_to_dict(conn, row):
-    imgs = conn.execute(
-        "SELECT id,image,color,sort_order,is_primary FROM product_images WHERE product_id=? ORDER BY is_primary DESC, sort_order ASC, id ASC",
-        (row["id"],)
-    ).fetchall()
-    gallery = [dict(x) for x in imgs]
-    main = gallery[0]["image"] if gallery else row["image"]
-    return {
-        "id": row["id"], "ref": row["ref"], "name": row["name"], "subtitle": row["subtitle"],
-        "description": row["description"], "price": row["price"], "category": row["category"],
-        "sizes": json.loads(row["sizes"] or "[]"), "colors": json.loads(row["colors"] or "[]"),
-        "image": main, "gallery": gallery,
-        "active": bool(row["active"]), "featured": bool(row["featured"])
-    }
+def split_csv(v): return [x.strip() for x in (v or '').split(',') if x.strip()]
+def parse_list(v):
+    if isinstance(v,list): return v
+    try: return json.loads(v or '[]')
+    except: return []
+
+def local_product(c,row):
+    imgs=[dict(x) for x in c.execute('SELECT id,image,color,sort_order,is_primary FROM product_images WHERE product_id=? ORDER BY is_primary DESC,sort_order,id',(row['id'],)).fetchall()]
+    main=imgs[0]['image'] if imgs else row['image']
+    return {'id':row['id'],'ref':row['ref'],'name':row['name'],'subtitle':row['subtitle'],'description':row['description'],'price':row['price'],'category':row['category'],'sizes':parse_list(row['sizes']),'colors':parse_list(row['colors']),'image':main,'gallery':imgs,'active':bool(row['active']),'featured':bool(row['featured'])}
+
+def remote_products(active_only=False):
+    q=sb.table('products').select('*')
+    if active_only: q=q.eq('active',True)
+    ps=q.order('featured',desc=True).order('id',desc=True).execute().data or []
+    imgs=sb.table('product_images').select('*').order('sort_order').execute().data or []
+    by={}
+    for i in imgs: by.setdefault(i['product_id'],[]).append(i)
+    out=[]
+    for p in ps:
+        g=sorted(by.get(p['id'],[]),key=lambda x:(not bool(x.get('is_primary')),x.get('sort_order',0),x.get('id',0)))
+        out.append({'id':p['id'],'ref':p['ref'],'name':p['name'],'subtitle':p.get('subtitle',''),'description':p.get('description',''),'price':p['price'],'category':p.get('category','Ropa'),'sizes':p.get('sizes') or [],'colors':p.get('colors') or [],'image':g[0]['image'] if g else p.get('image',''),'gallery':g,'active':bool(p.get('active',True)),'featured':bool(p.get('featured',True))})
+    return out
+
+def all_products(active_only=False):
+    if USE_SUPABASE: return remote_products(active_only)
+    c=get_db(); sql='SELECT * FROM products'+(' WHERE active=1' if active_only else '')+' ORDER BY featured DESC,id DESC'
+    out=[local_product(c,r) for r in c.execute(sql).fetchall()]; c.close(); return out
 
 def login_required(fn):
     @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not session.get("admin"):
-            return redirect(url_for("admin_login"))
-        return fn(*args, **kwargs)
-    return wrapper
+    def w(*a,**k):
+        if not session.get('admin'): return redirect(url_for('admin_login'))
+        return fn(*a,**k)
+    return w
 
-@app.route("/")
-def shop():
-    return render_template("shop.html")
+def save_local_file(f):
+    ext=Path(secure_filename(f.filename)).suffix.lower()
+    if ext not in ['.jpg','.jpeg','.png','.webp']: raise ValueError('Formato de imagen no permitido.')
+    name=f'{uuid.uuid4().hex[:14]}{ext}'; f.save(UPLOAD_DIR/name); return f'uploads/{name}'
 
-@app.route("/api/products")
-def api_products():
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM products WHERE active=1 ORDER BY featured DESC, id DESC").fetchall()
-    data = [product_to_dict(conn, r) for r in rows]
-    conn.close()
-    return jsonify(data)
+def upload_remote(f,ref):
+    ext=Path(secure_filename(f.filename)).suffix.lower()
+    if ext not in ['.jpg','.jpeg','.png','.webp']: raise ValueError('Formato de imagen no permitido.')
+    safe=''.join(ch for ch in ref if ch.isalnum() or ch in '-_') or 'producto'
+    path=f'{safe}/{uuid.uuid4().hex[:14]}{ext}'
+    content=f.read(); mime=mimetypes.guess_type(f.filename)[0] or 'application/octet-stream'
+    sb.storage.from_(SUPABASE_BUCKET).upload(path=path,file=content,file_options={'content-type':mime,'upsert':'false'})
+    return sb.storage.from_(SUPABASE_BUCKET).get_public_url(path), path
 
-@app.route("/admin/login", methods=["GET","POST"])
+def upload_local_to_remote(rel,ref):
+    full=BASE_DIR/'static'/rel
+    if not full.exists(): return rel,''
+    safe=''.join(ch for ch in ref if ch.isalnum() or ch in '-_') or 'producto'
+    path=f'{safe}/{uuid.uuid4().hex[:14]}{full.suffix.lower()}'
+    mime=mimetypes.guess_type(full.name)[0] or 'application/octet-stream'
+    sb.storage.from_(SUPABASE_BUCKET).upload(path=path,file=full.read_bytes(),file_options={'content-type':mime,'upsert':'false'})
+    return sb.storage.from_(SUPABASE_BUCKET).get_public_url(path),path
+
+@app.route('/')
+def shop(): return render_template('shop.html')
+
+@app.route('/api/products')
+def api_products(): return jsonify(all_products(True))
+
+@app.route('/health')
+def health(): return jsonify({'ok':True,'storage':'supabase' if USE_SUPABASE else 'sqlite-local','supabase_configured':USE_SUPABASE})
+
+@app.route('/admin/login',methods=['GET','POST'])
 def admin_login():
-    if request.method == "POST":
-        if request.form.get("username") == ADMIN_USER and request.form.get("password") == ADMIN_PASSWORD:
-            session["admin"] = True
-            return redirect(url_for("admin"))
-        flash("Usuario o contraseña incorrectos.")
-    return render_template("login.html")
+    if request.method=='POST':
+        if request.form.get('username')==ADMIN_USER and request.form.get('password')==ADMIN_PASSWORD:
+            session['admin']=True; return redirect(url_for('admin'))
+        flash('Usuario o contraseña incorrectos.')
+    return render_template('login.html')
 
-@app.route("/admin/logout")
-def admin_logout():
-    session.clear()
-    return redirect(url_for("admin_login"))
+@app.route('/admin/logout')
+def admin_logout(): session.clear(); return redirect(url_for('admin_login'))
 
-@app.route("/admin")
+@app.route('/admin')
 @login_required
 def admin():
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
-    data = [product_to_dict(conn, r) for r in rows]
-    conn.close()
-    return render_template("admin.html", products=data)
+    return render_template('admin.html',products=all_products(False),storage_mode='Supabase permanente' if USE_SUPABASE else 'SQLite local / temporal en Render',supabase_ready=USE_SUPABASE)
 
-def save_uploaded_file(file):
-    ext = Path(secure_filename(file.filename)).suffix.lower()
-    if ext not in [".jpg",".jpeg",".png",".webp"]:
-        raise ValueError("Formato de imagen no permitido.")
-    filename = f"{uuid.uuid4().hex[:14]}{ext}"
-    file.save(UPLOAD_DIR / filename)
-    return f"uploads/{filename}"
-
-def split_csv(value):
-    return [x.strip() for x in (value or "").split(",") if x.strip()]
-
-@app.route("/admin/product/new", methods=["POST"])
+@app.route('/admin/product/new',methods=['POST'])
 @login_required
-def admin_new():
-    return save_product(None)
+def admin_new(): return save_product(None)
 
-@app.route("/admin/product/<int:pid>", methods=["POST"])
+@app.route('/admin/product/<int:pid>',methods=['POST'])
 @login_required
-def admin_update(pid):
-    return save_product(pid)
+def admin_update(pid): return save_product(pid)
 
 def save_product(pid):
-    form = request.form
-    ref = form.get("ref","").strip()
-    name = form.get("name","").strip()
-    subtitle = form.get("subtitle","").strip()
-    description = form.get("description","").strip()
-    category = form.get("category","Ropa").strip() or "Ropa"
-    price = int((form.get("price","0") or "0").replace(".","").replace(",",""))
-    sizes = split_csv(form.get("sizes",""))
-    colors = split_csv(form.get("colors",""))
-    active = 1 if form.get("active") == "on" else 0
-    featured = 1 if form.get("featured") == "on" else 0
+    f=request.form; ref=f.get('ref','').strip(); name=f.get('name','').strip(); subtitle=f.get('subtitle','').strip(); desc=f.get('description','').strip(); category=f.get('category','Ropa').strip() or 'Ropa'; price=int((f.get('price','0') or '0').replace('.','').replace(',','')); sizes=split_csv(f.get('sizes')); colors=split_csv(f.get('colors')); active=f.get('active')=='on'; featured=f.get('featured')=='on'
+    payload={'ref':ref,'name':name,'subtitle':subtitle,'description':desc,'price':price,'category':category,'sizes':sizes,'colors':colors,'active':active,'featured':featured}
+    if USE_SUPABASE:
+        try:
+            if pid is None: pid=sb.table('products').insert(payload).execute().data[0]['id']
+            else: sb.table('products').update(payload).eq('id',pid).execute()
+            cover=request.files.get('cover_image')
+            if cover and cover.filename:
+                url,path=upload_remote(cover,ref); sb.table('product_images').update({'is_primary':False}).eq('product_id',pid).execute(); sb.table('product_images').insert({'product_id':pid,'image':url,'storage_path':path,'color':f.get('cover_color','').strip(),'sort_order':-1,'is_primary':True}).execute(); sb.table('products').update({'image':url}).eq('id',pid).execute()
+            gs=[x for x in request.files.getlist('gallery_images') if x and x.filename]; gc=split_csv(f.get('gallery_colors')); existing=sb.table('product_images').select('sort_order').eq('product_id',pid).execute().data or []; mx=max([x.get('sort_order',0) for x in existing] or [0])
+            for i,g in enumerate(gs):
+                url,path=upload_remote(g,ref); sb.table('product_images').insert({'product_id':pid,'image':url,'storage_path':path,'color':gc[i] if i<len(gc) else '','sort_order':mx+i+1,'is_primary':False}).execute()
+            for rid in request.form.getlist('remove_image'):
+                rows=sb.table('product_images').select('*').eq('id',int(rid)).eq('product_id',pid).execute().data or []
+                if rows:
+                    if rows[0].get('storage_path'):
+                        try: sb.storage.from_(SUPABASE_BUCKET).remove([rows[0]['storage_path']])
+                        except: pass
+                    sb.table('product_images').delete().eq('id',int(rid)).execute()
+            rem=sb.table('product_images').select('*').eq('product_id',pid).order('is_primary',desc=True).order('sort_order').execute().data or []
+            if rem:
+                if not any(bool(x.get('is_primary')) for x in rem): sb.table('product_images').update({'is_primary':True}).eq('id',rem[0]['id']).execute(); rem[0]['is_primary']=True
+                primary=sorted(rem,key=lambda x:(not bool(x.get('is_primary')),x.get('sort_order',0),x.get('id',0)))[0]; sb.table('products').update({'image':primary['image']}).eq('id',pid).execute()
+            else: sb.table('products').update({'image':''}).eq('id',pid).execute()
+            flash('Producto guardado en almacenamiento permanente.')
+        except Exception as e: flash(f'No se pudo guardar en Supabase: {e}')
+        return redirect(url_for('admin'))
 
-    conn = get_db()
+    c=get_db()
     try:
         if pid is None:
-            cur = conn.execute("""INSERT INTO products
-                (ref,name,subtitle,description,price,category,sizes,colors,image,active,featured)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (ref,name,subtitle,description,price,category,
-                 json.dumps(sizes,ensure_ascii=False),json.dumps(colors,ensure_ascii=False),
-                 "",active,featured))
-            pid = cur.lastrowid
+            cur=c.execute('INSERT INTO products(ref,name,subtitle,description,price,category,sizes,colors,image,active,featured) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(ref,name,subtitle,desc,price,category,json.dumps(sizes,ensure_ascii=False),json.dumps(colors,ensure_ascii=False),'',int(active),int(featured))); pid=cur.lastrowid
         else:
-            conn.execute("""UPDATE products SET
-                ref=?,name=?,subtitle=?,description=?,price=?,category=?,sizes=?,colors=?,active=?,featured=?
-                WHERE id=?""",
-                (ref,name,subtitle,description,price,category,
-                 json.dumps(sizes,ensure_ascii=False),json.dumps(colors,ensure_ascii=False),
-                 active,featured,pid))
-
-        # Optional new cover image.
-        cover = request.files.get("cover_image")
+            c.execute('UPDATE products SET ref=?,name=?,subtitle=?,description=?,price=?,category=?,sizes=?,colors=?,active=?,featured=? WHERE id=?',(ref,name,subtitle,desc,price,category,json.dumps(sizes,ensure_ascii=False),json.dumps(colors,ensure_ascii=False),int(active),int(featured),pid))
+        cover=request.files.get('cover_image')
         if cover and cover.filename:
-            image_path = save_uploaded_file(cover)
-            conn.execute("UPDATE product_images SET is_primary=0 WHERE product_id=?", (pid,))
-            conn.execute(
-                "INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,1)",
-                (pid, image_path, form.get("cover_color","").strip(), -1)
-            )
-            conn.execute("UPDATE products SET image=? WHERE id=?", (image_path, pid))
-
-        # Additional gallery images, with colors mapped in upload order.
-        gallery_files = [f for f in request.files.getlist("gallery_images") if f and f.filename]
-        gallery_colors = split_csv(form.get("gallery_colors",""))
-        max_sort = conn.execute(
-            "SELECT COALESCE(MAX(sort_order),0) m FROM product_images WHERE product_id=?",
-            (pid,)
-        ).fetchone()["m"]
-        for idx, f in enumerate(gallery_files):
-            image_path = save_uploaded_file(f)
-            color = gallery_colors[idx] if idx < len(gallery_colors) else ""
-            conn.execute(
-                "INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,0)",
-                (pid, image_path, color, max_sort + idx + 1)
-            )
-
-        # Remove selected existing gallery images.
-        remove_ids = request.form.getlist("remove_image")
-        for rid in remove_ids:
-            try:
-                rid_int = int(rid)
-            except:
-                continue
-            row = conn.execute("SELECT image,is_primary FROM product_images WHERE id=? AND product_id=?", (rid_int,pid)).fetchone()
-            if row:
-                conn.execute("DELETE FROM product_images WHERE id=?", (rid_int,))
-
-        # Ensure there is one primary image.
-        imgs = conn.execute(
-            "SELECT id,image,is_primary FROM product_images WHERE product_id=? ORDER BY is_primary DESC, sort_order ASC, id ASC",
-            (pid,)
-        ).fetchall()
+            path=save_local_file(cover); c.execute('UPDATE product_images SET is_primary=0 WHERE product_id=?',(pid,)); c.execute('INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,1)',(pid,path,f.get('cover_color','').strip(),-1)); c.execute('UPDATE products SET image=? WHERE id=?',(path,pid))
+        gs=[x for x in request.files.getlist('gallery_images') if x and x.filename]; gc=split_csv(f.get('gallery_colors')); mx=c.execute('SELECT COALESCE(MAX(sort_order),0) m FROM product_images WHERE product_id=?',(pid,)).fetchone()['m']
+        for i,g in enumerate(gs): c.execute('INSERT INTO product_images(product_id,image,color,sort_order,is_primary) VALUES(?,?,?,?,0)',(pid,save_local_file(g),gc[i] if i<len(gc) else '',mx+i+1))
+        for rid in request.form.getlist('remove_image'): c.execute('DELETE FROM product_images WHERE id=? AND product_id=?',(int(rid),pid))
+        imgs=c.execute('SELECT * FROM product_images WHERE product_id=? ORDER BY is_primary DESC,sort_order,id',(pid,)).fetchall()
         if imgs:
-            if not any(x["is_primary"] for x in imgs):
-                conn.execute("UPDATE product_images SET is_primary=1 WHERE id=?", (imgs[0]["id"],))
-            first = conn.execute(
-                "SELECT image FROM product_images WHERE product_id=? ORDER BY is_primary DESC, sort_order ASC, id ASC LIMIT 1",
-                (pid,)
-            ).fetchone()
-            conn.execute("UPDATE products SET image=? WHERE id=?", (first["image"],pid))
-        else:
-            conn.execute("UPDATE products SET image='' WHERE id=?", (pid,))
+            if not any(x['is_primary'] for x in imgs): c.execute('UPDATE product_images SET is_primary=1 WHERE id=?',(imgs[0]['id'],))
+            first=c.execute('SELECT image FROM product_images WHERE product_id=? ORDER BY is_primary DESC,sort_order,id LIMIT 1',(pid,)).fetchone(); c.execute('UPDATE products SET image=? WHERE id=?',(first['image'],pid))
+        else: c.execute("UPDATE products SET image='' WHERE id=?",(pid,))
+        c.commit(); flash('Producto guardado localmente.')
+    except Exception as e: c.rollback(); flash(f'No se pudo guardar: {e}')
+    finally: c.close()
+    return redirect(url_for('admin'))
 
-        conn.commit()
-        flash("Producto guardado correctamente.")
-    except Exception as e:
-        conn.rollback()
-        flash(f"No se pudo guardar: {e}")
-    finally:
-        conn.close()
-    return redirect(url_for("admin"))
-
-@app.route("/admin/product/<int:pid>/delete", methods=["POST"])
+@app.route('/admin/product/<int:pid>/delete',methods=['POST'])
 @login_required
 def admin_delete(pid):
-    conn = get_db()
-    conn.execute("DELETE FROM product_images WHERE product_id=?", (pid,))
-    conn.execute("DELETE FROM products WHERE id=?", (pid,))
-    conn.commit()
-    conn.close()
-    flash("Producto eliminado.")
-    return redirect(url_for("admin"))
+    if USE_SUPABASE:
+        imgs=sb.table('product_images').select('*').eq('product_id',pid).execute().data or []
+        for img in imgs:
+            if img.get('storage_path'):
+                try: sb.storage.from_(SUPABASE_BUCKET).remove([img['storage_path']])
+                except: pass
+        sb.table('product_images').delete().eq('product_id',pid).execute(); sb.table('products').delete().eq('id',pid).execute(); flash('Producto eliminado.'); return redirect(url_for('admin'))
+    c=get_db(); c.execute('DELETE FROM product_images WHERE product_id=?',(pid,)); c.execute('DELETE FROM products WHERE id=?',(pid,)); c.commit(); c.close(); flash('Producto eliminado.'); return redirect(url_for('admin'))
 
-if __name__ == "__main__":
-    init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+@app.route('/admin/migrate-local-to-supabase',methods=['POST'])
+@login_required
+def migrate_local_to_supabase():
+    if not USE_SUPABASE: flash('Primero configura Supabase en Render.'); return redirect(url_for('admin'))
+    c=get_db(); np=ni=0
+    try:
+        for p in c.execute('SELECT * FROM products ORDER BY id').fetchall():
+            payload={'ref':p['ref'],'name':p['name'],'subtitle':p['subtitle'],'description':p['description'],'price':p['price'],'category':p['category'],'sizes':parse_list(p['sizes']),'colors':parse_list(p['colors']),'active':bool(p['active']),'featured':bool(p['featured']),'image':''}
+            ex=sb.table('products').select('*').eq('ref',p['ref']).execute().data or []
+            remote=(sb.table('products').update(payload).eq('ref',p['ref']).execute().data[0] if ex else sb.table('products').insert(payload).execute().data[0]); rid=remote['id']; np+=1
+            if sb.table('product_images').select('id').eq('product_id',rid).execute().data: continue
+            first=''
+            for img in c.execute('SELECT * FROM product_images WHERE product_id=? ORDER BY is_primary DESC,sort_order,id',(p['id'],)).fetchall():
+                if str(img['image']).startswith('http'): url,path=img['image'],''
+                else: url,path=upload_local_to_remote(img['image'],p['ref'])
+                sb.table('product_images').insert({'product_id':rid,'image':url,'storage_path':path,'color':img['color'],'sort_order':img['sort_order'],'is_primary':bool(img['is_primary'])}).execute(); ni+=1
+                if not first or img['is_primary']: first=url
+            if first: sb.table('products').update({'image':first}).eq('id',rid).execute()
+        flash(f'Migración terminada: {np} productos y {ni} imágenes.')
+    except Exception as e: flash(f'Error durante la migración: {e}')
+    finally: c.close()
+    return redirect(url_for('admin'))
+
+if __name__=='__main__':
+    init_db(); app.run(host='0.0.0.0',port=int(os.environ.get('PORT','5000')),debug=True)
