@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El Atelier - Boutique</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<header class="v4-header">
+  <button class="menu-btn" aria-label="Menú">☰</button>
+  <a href="/" class="v4-brand">
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="El Atelier">
+    <div><strong>Atelier</strong><span>BOUTIQUE</span></div>
+  </a>
+  <nav class="v4-nav">
+    <a href="#inicio">Inicio</a>
+    <a href="#catalogo">Categorías</a>
+    <a href="#catalogo">Novedades</a>
+    <button id="openCart">Mi pedido</button>
+  </nav>
+  <div class="v4-actions">
+    <span>⌕</span><span>♡</span>
+    <button class="bag-btn" id="topCart">🛍 <b id="cartBadge">0</b></button>
+  </div>
+</header>
+
+<main id="inicio">
+<section class="breadcrumb">
+  Inicio / Ropa / <span id="crumbName">Colección El Atelier</span>
+</section>
+
+<section class="catalog" id="catalogo">
+  <div class="catalog-title">
+    <div>
+      <span>COLECCIÓN ACTUAL</span>
+      <h1>Novedades</h1>
+      <p>Elige tu favorito y haz clic en la imagen para ver todos los detalles.</p>
+    </div>
+    <div class="chips">
+      <button class="chip active" data-cat="Todos">Todo</button>
+      <button class="chip" data-cat="Ropa">Ropa</button>
+      <button class="chip" data-cat="Calzado">Calzado</button>
+      <button class="chip" data-cat="Hogar">Hogar</button>
+    </div>
+  </div>
+  <div class="search-row">
+    <input id="searchInput" placeholder="Buscar producto...">
+  </div>
+  <div id="productGrid" class="productGrid"></div>
+</section>
+</main>
+
+<!-- Product detail modal -->
+<div id="productModal" class="productModal" aria-hidden="true">
+  <div class="modal-shell">
+    <button class="modalClose" id="closeProduct">×</button>
+
+    <div class="product-layout">
+      <div class="gallery-column">
+        <div id="modalThumbs" class="thumb-strip"></div>
+        <div class="main-photo-card">
+          <button class="zoom-chip" id="zoomImage">⌕</button>
+          <img id="modalMainImage" alt="">
+          <div class="image-hint">Haz clic en la imagen para verla en pantalla completa</div>
+        </div>
+      </div>
+
+      <div class="detail-column">
+        <div class="rating-row">★★★★★ <span>(12 reseñas)</span></div>
+        <h1 id="modalName"></h1>
+        <div class="modalPrice" id="modalPrice"></div>
+        <p class="modalDescription" id="modalDescription"></p>
+
+        <div class="detail-separator"></div>
+
+        <div class="optionBlock">
+          <label>Talla</label>
+          <div id="modalSizes" class="optionButtons"></div>
+        </div>
+
+        <div class="optionBlock">
+          <label>Color</label>
+          <div id="modalColors" class="colorOptions"></div>
+        </div>
+
+        <div class="qtyBlock">
+          <label>Cantidad</label>
+          <div class="qtyControl">
+            <button type="button" id="qtyMinus">−</button>
+            <span id="modalQty">1</span>
+            <button type="button" id="qtyPlus">+</button>
+          </div>
+        </div>
+
+        <button id="modalAdd" class="bigAdd">🛍 AGREGAR AL CARRITO</button>
+
+        <div class="benefit-list">
+          <div>🚚 <span>Domicilio gratis en Pasto</span></div>
+          <div>📦 <span>Otras ciudades: + envío</span></div>
+          <div>♡ <span>Atención personalizada</span></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="product-features">
+      <div><b>Tela premium</b><span>Alta calidad</span></div>
+      <div><b>Diseño actual</b><span>Estiliza tu figura</span></div>
+      <div><b>Comodidad total</b><span>Para tu día a día</span></div>
+    </section>
+
+    <section class="related-section">
+      <div class="related-head">
+        <h2>También te puede gustar</h2>
+        <button onclick="closeProduct()">Ver más</button>
+      </div>
+      <div id="relatedProducts" class="related-grid"></div>
+    </section>
+  </div>
+</div>
+
+<!-- Fullscreen gallery/lightbox -->
+<div id="lightbox" class="lightbox">
+  <button class="lightboxClose" id="closeLightbox">×</button>
+  <button class="lightboxArrow left" id="lightPrev">←</button>
+  <div class="lightboxMain">
+    <img id="lightboxImage" alt="">
+    <div class="lightboxCaption">
+      <span id="lightColor">Color</span>
+      <span id="lightCounter">1 / 1</span>
+    </div>
+  </div>
+  <button class="lightboxArrow right" id="lightNext">→</button>
+  <div id="lightboxThumbs" class="lightboxThumbs"></div>
+</div>
+
+<!-- Cart drawer -->
+<div id="overlay" class="overlay"></div>
+<aside id="drawer" class="drawer">
+  <div class="drawerHead">
+    <div><small>TU SELECCIÓN</small><h2>Mi pedido</h2></div>
+    <button id="closeCart">×</button>
+  </div>
+  <div id="cartItems"></div>
+  <div id="emptyCart" class="emptyCart">Aún no has agregado productos.</div>
+  <div id="cartFormWrap">
+    <div class="summary"><span>Total productos</span><b id="subtotal">$0</b></div>
+    <form id="orderForm">
+      <label>Nombre completo *<input id="name" required></label>
+      <label>Teléfono *<input id="phone" required></label>
+      <label>Ciudad *
+        <select id="city" required><option value="">Selecciona</option><option>Pasto</option><option>Otra ciudad</option></select>
+      </label>
+      <label id="otherCityWrap" class="hidden">¿Cuál ciudad? *<input id="otherCity"></label>
+      <label>Observaciones<textarea id="notes" rows="3"></textarea></label>
+      <div id="shippingInfo" class="shippingInfo">Selecciona tu ciudad.</div>
+      <label class="check"><input type="checkbox" required> Entiendo que la solicitud está sujeta a confirmación de disponibilidad.</label>
+      <button class="sendBtn">ENVIAR SOLICITUD →</button>
+      <small class="help">Se abrirá WhatsApp con tu pedido completo y organizado.</small>
+    </form>
+  </div>
+</aside>
+
+<!-- Sticky bottom cart -->
+<div class="sticky-cart" id="stickyCart">
+  <div class="sticky-summary">
+    <span class="sticky-icon">🛍</span>
+    <div><b>MI CARRITO</b><small id="stickyCountText">0 productos</small></div>
+  </div>
+  <div id="stickyThumbs" class="stickyThumbs"></div>
+  <div class="sticky-total"><span>TOTAL</span><b id="stickyTotal">$0</b></div>
+  <button id="stickyOpen">VER MI PEDIDO →</button>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="{{ url_for('static', filename='shop.js') }}"></script>
+</body>
+</html>

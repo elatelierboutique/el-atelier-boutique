@@ -1,0 +1,70 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin · El Atelier</title><link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}"></head>
+<body>
+<header class="adminHeader"><div><b>El Atelier · Admin</b><small>Catálogo, colores y galería</small></div><div><a href="/" target="_blank">Ver tienda</a><a href="/admin/logout">Salir</a></div></header>
+<main class="adminMain">
+{% with messages=get_flashed_messages() %}{% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}{% endwith %}
+
+<section class="panel">
+<h2>+ Nuevo producto</h2>
+<p class="tip">Puedes subir un collage como portada y varias imágenes adicionales, por ejemplo una por cada color.</p>
+<form class="productForm" method="post" action="/admin/product/new" enctype="multipart/form-data">
+<div class="grid2"><label>Referencia<input name="ref" placeholder="AT-007" required></label><label>Nombre<input name="name" required></label></div>
+<div class="grid2"><label>Subtítulo<input name="subtitle"></label><label>Precio<input name="price" type="number" required></label></div>
+<div class="grid2"><label>Categoría<select name="category"><option>Ropa</option><option>Calzado</option><option>Hogar</option></select></label><label>Foto principal / collage<input name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp"></label></div>
+<label>Color asociado a la portada <small>opcional</small><input name="cover_color" placeholder="Ej. Azul denim"></label>
+<label>Descripción<textarea name="description"></textarea></label>
+<div class="grid2"><label>Tallas <small>separadas por coma</small><input name="sizes" placeholder="S/M, M/L, L/XL"></label><label>Colores disponibles <small>separados por coma</small><input name="colors" placeholder="Negro, Beige, Rosa"></label></div>
+<div class="galleryBox">
+  <label>Fotos adicionales <small>puedes seleccionar varias a la vez</small><input name="gallery_images" type="file" multiple accept=".jpg,.jpeg,.png,.webp"></label>
+  <label>Color de cada foto <small>en el mismo orden, separado por coma</small><input name="gallery_colors" placeholder="Negro, Beige, Rosa"></label>
+</div>
+<div class="toggles"><label><input type="checkbox" name="active" checked> Publicado</label><label><input type="checkbox" name="featured" checked> Novedad</label></div>
+<button>Guardar producto</button>
+</form>
+</section>
+
+<section class="panel"><h2>Productos</h2>
+<div class="productAdminGrid">
+{% for p in products %}
+<article class="adminProduct">
+<div class="adminGallery">
+{% for img in p.gallery %}
+  <label class="galleryItem">
+    <img src="{{ url_for('static', filename=img.image) }}">
+    <span>{{ img.color or 'Sin color' }}</span>
+    <small><input type="checkbox" name="noop" disabled> Imagen actual</small>
+  </label>
+{% endfor %}
+</div>
+<form method="post" action="/admin/product/{{ p.id }}" enctype="multipart/form-data">
+<div class="grid2"><label>Ref<input name="ref" value="{{ p.ref }}"></label><label>Precio<input name="price" type="number" value="{{ p.price }}"></label></div>
+<label>Nombre<input name="name" value="{{ p.name }}"></label>
+<label>Subtítulo<input name="subtitle" value="{{ p.subtitle }}"></label>
+<label>Descripción<textarea name="description">{{ p.description }}</textarea></label>
+<div class="grid2"><label>Categoría<select name="category"><option {% if p.category=='Ropa' %}selected{% endif %}>Ropa</option><option {% if p.category=='Calzado' %}selected{% endif %}>Calzado</option><option {% if p.category=='Hogar' %}selected{% endif %}>Hogar</option></select></label><label>Nueva portada / collage<input name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp"></label></div>
+<label>Color asociado a nueva portada<input name="cover_color" placeholder="Opcional"></label>
+<label>Tallas<input name="sizes" value="{{ p.sizes|join(', ') }}"></label>
+<label>Colores<input name="colors" value="{{ p.colors|join(', ') }}"></label>
+
+<div class="galleryBox">
+  <label>Agregar fotos a la galería<input name="gallery_images" type="file" multiple accept=".jpg,.jpeg,.png,.webp"></label>
+  <label>Colores de las nuevas fotos <small>mismo orden</small><input name="gallery_colors" placeholder="Negro, Beige, Rosa"></label>
+</div>
+
+{% if p.gallery %}
+<div class="removeImages"><b>Eliminar fotos actuales</b>
+{% for img in p.gallery %}
+<label><input type="checkbox" name="remove_image" value="{{ img.id }}"> {{ img.color or 'Foto' }} · {{ img.image.split('/')[-1] }}</label>
+{% endfor %}
+</div>
+{% endif %}
+
+<div class="toggles"><label><input type="checkbox" name="active" {% if p.active %}checked{% endif %}> Publicado</label><label><input type="checkbox" name="featured" {% if p.featured %}checked{% endif %}> Novedad</label></div>
+<button>Guardar cambios</button>
+</form>
+<form method="post" action="/admin/product/{{ p.id }}/delete" onsubmit="return confirm('¿Eliminar este producto?')"><button class="danger">Eliminar producto</button></form>
+</article>
+{% endfor %}
+</div></section>
+</main></body></html>
