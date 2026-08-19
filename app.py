@@ -34,7 +34,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
       subtitle TEXT DEFAULT '', description TEXT DEFAULT '', price INTEGER NOT NULL,
-      category TEXT NOT NULL DEFAULT 'Ropa', sizes TEXT DEFAULT '[]', colors TEXT DEFAULT '[]',
+      category TEXT NOT NULL DEFAULT 'Prendas', sizes TEXT DEFAULT '[]', colors TEXT DEFAULT '[]',
       image TEXT DEFAULT '', active INTEGER DEFAULT 1, featured INTEGER DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS product_images (
@@ -68,7 +68,7 @@ def remote_products(active_only=False):
     out=[]
     for p in ps:
         g=sorted(by.get(p['id'],[]),key=lambda x:(not bool(x.get('is_primary')),x.get('sort_order',0),x.get('id',0)))
-        out.append({'id':p['id'],'ref':p['ref'],'name':p['name'],'subtitle':p.get('subtitle',''),'description':p.get('description',''),'price':p['price'],'category':p.get('category','Ropa'),'sizes':p.get('sizes') or [],'colors':p.get('colors') or [],'image':g[0]['image'] if g else p.get('image',''),'gallery':g,'active':bool(p.get('active',True)),'featured':bool(p.get('featured',True))})
+        out.append({'id':p['id'],'ref':p['ref'],'name':p['name'],'subtitle':p.get('subtitle',''),'description':p.get('description',''),'price':p['price'],'category':p.get('category','Prendas'),'sizes':p.get('sizes') or [],'colors':p.get('colors') or [],'image':g[0]['image'] if g else p.get('image',''),'gallery':g,'active':bool(p.get('active',True)),'featured':bool(p.get('featured',True))})
     return out
 
 def all_products(active_only=False):
@@ -145,7 +145,7 @@ def save_product(pid):
     name=f.get('name','').strip()
     subtitle=f.get('subtitle','').strip()
     desc=f.get('description','').strip()
-    category=f.get('category','Ropa').strip() or 'Ropa'
+    category=f.get('category','Prendas').strip() or 'Prendas'
     raw_price=(f.get('price','0') or '0').replace('.','').replace(',','').strip()
     sizes=split_csv(f.get('sizes'))
     colors=split_csv(f.get('colors'))

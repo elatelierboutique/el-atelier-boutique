@@ -1,98 +1,214 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin · El Atelier</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Administrar · El Atelier Boutique</title>
+<style>
+:root{
+  --ink:#10213f;--pink:#ff2f75;--pink2:#ff5b91;--line:#e9e9ed;--soft:#f7f7f9;
+  --muted:#747987;--white:#fff;--green:#137a48;--red:#a93846;--shadow:0 12px 35px rgba(20,30,55,.08);
+}
+*{box-sizing:border-box}body{margin:0;background:#f6f6f8;color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+a{text-decoration:none;color:inherit}button,input,select,textarea{font:inherit}
+.top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:15px 4vw;background:#fff;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px}.mark{width:43px;height:43px;border-radius:50%;display:grid;place-items:center;background:#111;color:#fff;font-weight:800}.brand b{display:block;font-size:17px}.brand small{display:block;color:var(--muted);margin-top:2px}
+.topnav{display:flex;gap:10px}.topnav a{padding:9px 12px;border:1px solid var(--line);border-radius:999px;font-size:12px}
+.wrap{max-width:1150px;margin:25px auto;padding:0 16px 50px}
+.status{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 16px;margin-bottom:15px}
+.status strong{font-size:13px}.status span{font-size:12px;color:var(--green);font-weight:700}
+.flash{padding:13px 15px;margin:0 0 14px;border-radius:10px;font-size:13px}.flash.success{background:#eaf8ef;color:#145a35}.flash.error{background:#fff0f1;color:#8e2531}.flash.message{background:#eef4ff}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:24px;margin-bottom:22px}
+.eyebrow{font-size:10px;color:var(--pink);letter-spacing:.16em;font-weight:800}.panel h1{font-size:31px;margin:5px 0 6px}.panel h2{margin:5px 0 0}.intro{color:var(--muted);font-size:13px;margin:0 0 22px}
+.steps{display:grid;gap:0}.step{display:grid;grid-template-columns:46px 1fr;gap:15px;padding:21px 0;border-top:1px solid var(--line)}.step:first-child{border-top:0;padding-top:5px}
+.num{width:36px;height:36px;border-radius:50%;background:#111;color:#fff;display:grid;place-items:center;font-weight:800}
+.step h3{margin:6px 0 12px;font-size:16px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;margin-bottom:12px}label small{font-weight:400;color:var(--muted)}
+input,select,textarea{width:100%;border:1px solid #d9d9df;border-radius:10px;padding:12px;background:#fff;color:#111;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#999;box-shadow:0 0 0 3px #00000008}textarea{min-height:105px;resize:vertical}
+.drop{border:1.5px dashed #cfd0d8;background:#fafafa;border-radius:14px;padding:22px;text-align:center;cursor:pointer;display:block}.drop b,.drop small{display:block}.drop b{margin:6px 0}.plus{font-size:28px;color:var(--pink)}.drop input{margin-top:12px}
+.preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.preview img{width:78px;height:92px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+details.extra{border:1px solid var(--line);border-radius:10px;background:#fafafa;margin-top:8px}details.extra summary{cursor:pointer;padding:12px 14px;font-size:12px;font-weight:800}.extraBody{padding:0 14px 14px}.checks{display:flex;flex-wrap:wrap;gap:16px}.checks label{flex-direction:row;align-items:center;font-weight:400;margin:0}.checks input{width:auto}
+.publish{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#111;color:#fff;border-radius:13px;padding:17px;margin-top:8px}.publish div{display:flex;flex-direction:column;gap:3px}.publish small{color:#bbb}
+.publish button{border:0;background:var(--pink);color:#fff;font-weight:800;border-radius:9px;padding:14px 20px;cursor:pointer}
+.catalogHead{display:flex;align-items:end;justify-content:space-between;margin-bottom:17px}.count{font-size:12px;color:var(--muted)}
+.list{display:grid;gap:10px}.row{border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;grid-template-columns:78px 1fr 120px auto;gap:13px;align-items:center}
+.thumb img,.noimg{width:78px;height:92px;border-radius:8px;object-fit:cover;background:#f1f1f2}.noimg{display:grid;place-items:center;font-size:10px;color:#999}.info{display:flex;flex-direction:column;gap:4px}.info b{font-size:15px}.info span,.info small{font-size:11px;color:var(--muted)}.price{font-weight:800}
+.actions{display:flex;gap:7px}.actions button{border:0;padding:9px 10px;border-radius:8px;cursor:pointer}.editBtn{background:#f0f2f7;color:#222}.delBtn{background:#fff0f1;color:var(--red)}
+.editBox{grid-column:1/-1;border-top:1px solid var(--line);padding-top:12px;margin-top:5px;display:none}.editBox.open{display:block}
+.empty{padding:35px;text-align:center;background:#fafafa;border-radius:12px;color:var(--muted)}
+.categoryPills{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 2px}.pill{font-size:11px;padding:5px 8px;background:#f2f3f6;border-radius:999px}
+@media(max-width:780px){.grid2{grid-template-columns:1fr}.row{grid-template-columns:65px 1fr}.price,.actions{grid-column:2}.publish{flex-direction:column;align-items:stretch}.top{padding:12px}.brand small{display:none}.panel{padding:17px}.step{grid-template-columns:38px 1fr}}
+</style>
 </head>
 <body>
-<header class="adminHeader">
-  <div><b>El Atelier · Admin</b><small>Publicación sencilla de productos</small></div>
-  <div><a href="/" target="_blank">Ver tienda</a><a href="/admin/logout">Salir</a></div>
+<header class="top">
+  <div class="brand"><div class="mark">EA</div><div><b>El Atelier Boutique</b><small>Administrador de catálogo</small></div></div>
+  <nav class="topnav"><a href="/" target="_blank">Ver tienda</a><a href="/admin/logout">Salir</a></nav>
 </header>
-<main class="adminMain">
-  <div class="storageStatus">
-    <b>Almacenamiento:</b> {{ storage_mode }}
-    {% if supabase_ready %}<span class="ok">✓ Permanente</span>{% else %}<span class="warn">⚠ Temporal</span>{% endif %}
-  </div>
+
+<main class="wrap">
+  <section class="status">
+    <strong>Almacenamiento: {{ storage_mode }}</strong>
+    {% if supabase_ready %}<span>✓ Supabase conectado</span>{% else %}<span style="color:#a76c00">⚠ Modo temporal</span>{% endif %}
+  </section>
 
   {% with messages=get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category,message in messages %}
-        <div class="flash {{ category }}">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
+    {% if messages %}{% for category,message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}{% endif %}
   {% endwith %}
 
   <section class="panel">
-    <h1>Publicar producto</h1>
-    <p class="tip">Si algo falla, tus datos escritos se conservan y verás el error real.</p>
-    <form class="productForm simpleForm" method="post" action="/admin/product/new" enctype="multipart/form-data">
-      <div class="grid2">
-        <label>Referencia<input name="ref" placeholder="AT-007" value="{{ draft.get('ref','') }}" required></label>
-        <label>Nombre<input name="name" placeholder="Ej. Conjunto tejido" value="{{ draft.get('name','') }}" required></label>
-      </div>
-      <div class="grid2">
-        <label>Precio<input name="price" type="number" min="1" placeholder="120000" value="{{ draft.get('price','') }}" required></label>
-        <label>Categoría
-          {% set dc=draft.get('category','Ropa') %}
-          <select name="category">
-            <option {% if dc=='Ropa' %}selected{% endif %}>Ropa</option>
-            <option {% if dc=='Calzado' %}selected{% endif %}>Calzado</option>
-            <option {% if dc=='Hogar' %}selected{% endif %}>Hogar</option>
-          </select>
-        </label>
-      </div>
-      <label>Foto principal / collage
-        <input name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp">
-        <small>Esta será la portada del producto.</small>
-      </label>
-      <div class="grid2">
-        <label>Tallas<input name="sizes" placeholder="S/M, M/L, L/XL" value="{{ draft.get('sizes','') }}"><small>Separadas por coma.</small></label>
-        <label>Colores<input name="colors" placeholder="Negro, Beige, Rosa" value="{{ draft.get('colors','') }}"><small>Separados por coma.</small></label>
-      </div>
-      <label>Descripción<textarea name="description" placeholder="Describe la prenda o producto.">{{ draft.get('description','') }}</textarea></label>
+    <div class="eyebrow">NUEVO PRODUCTO</div>
+    <h1>Publicar en la tienda</h1>
+    <p class="intro">Sube tus fotos, escribe la información y publica. Las opciones menos usadas están ocultas para que sea más sencillo.</p>
 
-      <details class="advancedBox">
-        <summary>Más opciones</summary>
-        <div class="advancedInside">
-          <label>Subtítulo<input name="subtitle" value="{{ draft.get('subtitle','') }}"></label>
-          <label>Color asociado a la portada<input name="cover_color" value="{{ draft.get('cover_color','') }}"></label>
-          <label>Fotos adicionales<input name="gallery_images" type="file" multiple accept=".jpg,.jpeg,.png,.webp"></label>
-          <label>Colores de las fotos adicionales<input name="gallery_colors" placeholder="Negro, Beige, Rosa" value="{{ draft.get('gallery_colors','') }}"></label>
-          <div class="toggles">
-            <label><input type="checkbox" name="active" {% if draft.get('active',True) %}checked{% endif %}> Publicado</label>
-            <label><input type="checkbox" name="featured" {% if draft.get('featured',True) %}checked{% endif %}> Novedad</label>
+    <form method="post" action="/admin/product/new" enctype="multipart/form-data">
+      <div class="steps">
+
+        <div class="step"><div class="num">1</div><div>
+          <h3>Fotografías</h3>
+          <label class="drop">
+            <span class="plus">＋</span><b>Foto principal o collage</b><small>Esta será la portada del producto</small>
+            <input id="coverInput" name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp">
+          </label>
+          <div class="preview" id="coverPreview"></div>
+          <details class="extra"><summary>＋ Agregar fotografías adicionales</summary><div class="extraBody">
+            <label>Fotos adicionales<input id="galleryInput" name="gallery_images" type="file" multiple accept=".jpg,.jpeg,.png,.webp"></label>
+            <div class="preview" id="galleryPreview"></div>
+            <label>Colores de esas fotografías<input name="gallery_colors" placeholder="Ej. Negro, Beige, Rosa"><small>En el mismo orden en que seleccionaste las fotos.</small></label>
+          </div></details>
+        </div></div>
+
+        <div class="step"><div class="num">2</div><div>
+          <h3>Información básica</h3>
+          <div class="grid2">
+            <label>Nombre del producto<input name="name" placeholder="Ej. Conjunto tejido" value="{{ draft.get('name','') }}" required></label>
+            <label>Precio final<input name="price" type="number" min="1" placeholder="120000" value="{{ draft.get('price','') }}" required></label>
           </div>
-        </div>
-      </details>
+          <div class="grid2">
+            <label>Referencia<input name="ref" placeholder="AT-001" value="{{ draft.get('ref','') }}" required></label>
+            <label>Categoría
+              {% set dc=draft.get('category','Prendas') %}
+              <select name="category">
+                <option value="Prendas" {% if dc in ['Prendas','Ropa'] %}selected{% endif %}>Prendas</option>
+                <option value="Zapatos" {% if dc in ['Zapatos','Calzado'] %}selected{% endif %}>Zapatos</option>
+                <option value="Hogar" {% if dc=='Hogar' %}selected{% endif %}>Hogar</option>
+                <option value="Variedades" {% if dc=='Variedades' %}selected{% endif %}>Variedades</option>
+              </select>
+            </label>
+          </div>
+        </div></div>
 
-      <button class="publishBtn">PUBLICAR PRODUCTO</button>
+        <div class="step"><div class="num">3</div><div>
+          <h3>Tallas y colores</h3>
+          <div class="grid2">
+            <label>Tallas disponibles<input name="sizes" placeholder="S/M, M/L, L/XL" value="{{ draft.get('sizes','') }}"><small>Separadas por coma. Si no aplica, déjalo vacío.</small></label>
+            <label>Colores disponibles<input name="colors" placeholder="Negro, Beige, Rosa" value="{{ draft.get('colors','') }}"><small>Separados por coma. Si no aplica, déjalo vacío.</small></label>
+          </div>
+        </div></div>
+
+        <div class="step"><div class="num">4</div><div>
+          <h3>Descripción</h3>
+          <label>Descripción del producto<textarea name="description" placeholder="Ej. Conjunto 2 piezas en tela suave y fresca, ideal para looks casuales...">{{ draft.get('description','') }}</textarea></label>
+          <details class="extra"><summary>Opciones adicionales</summary><div class="extraBody">
+            <label>Subtítulo<input name="subtitle" placeholder="Ej. Nuevo ingreso" value="{{ draft.get('subtitle','') }}"></label>
+            <label>Color asociado a la portada<input name="cover_color" placeholder="Ej. Azul denim" value="{{ draft.get('cover_color','') }}"></label>
+            <div class="checks">
+              <label><input type="checkbox" name="active" checked> Publicar inmediatamente</label>
+              <label><input type="checkbox" name="featured" checked> Mostrar como novedad</label>
+            </div>
+          </div></details>
+        </div></div>
+      </div>
+
+      <div class="publish">
+        <div><b>¿Todo listo?</b><small>Al publicar quedará guardado permanentemente en Supabase.</small></div>
+        <button type="submit">PUBLICAR PRODUCTO</button>
+      </div>
     </form>
   </section>
 
   <section class="panel">
-    <h2>Productos publicados</h2>
+    <div class="catalogHead">
+      <div><div class="eyebrow">CATÁLOGO</div><h2>Productos publicados</h2></div>
+      <span class="count">{{ products|length }} producto(s)</span>
+    </div>
+
     {% if products %}
-      <div class="productAdminGrid">
+      <div class="list">
       {% for p in products %}
-        <article class="adminProduct compact">
-          {% if p.image %}
-            {% if p.image.startswith('http') %}<img src="{{ p.image }}">{% else %}<img src="{{ url_for('static', filename=p.image) }}">{% endif %}
-          {% endif %}
-          <div class="productMiniInfo">
-            <b>{{ p.name }}</b><span>{{ p.ref }}</span>
-            <strong>${{ "{:,.0f}".format(p.price).replace(",",".") }}</strong>
+        <article class="row">
+          <div class="thumb">
+            {% if p.image %}
+              {% if p.image.startswith('http') %}<img src="{{ p.image }}">{% else %}<img src="{{ url_for('static', filename=p.image) }}">{% endif %}
+            {% else %}<div class="noimg">Sin foto</div>{% endif %}
           </div>
-          <form method="post" action="/admin/product/{{ p.id }}/delete" onsubmit="return confirm('¿Eliminar este producto?')">
-            <button class="danger">Eliminar</button>
-          </form>
+          <div class="info">
+            <b>{{ p.name }}</b>
+            <span>{{ p.ref }} · {{ 'Prendas' if p.category=='Ropa' else ('Zapatos' if p.category=='Calzado' else p.category) }}</span>
+            <small>{{ p.sizes|join(' · ') }}{% if p.colors %} · {{ p.colors|join(' · ') }}{% endif %}</small>
+          </div>
+          <div class="price">${{ "{:,.0f}".format(p.price).replace(",",".") }}</div>
+          <div class="actions">
+            <button type="button" class="editBtn" onclick="toggleEdit('edit-{{ p.id }}')">Editar</button>
+            <form method="post" action="/admin/product/{{ p.id }}/delete" onsubmit="return confirm('¿Eliminar este producto?')">
+              <button class="delBtn">Eliminar</button>
+            </form>
+          </div>
+
+          <div class="editBox" id="edit-{{ p.id }}">
+            <form method="post" action="/admin/product/{{ p.id }}" enctype="multipart/form-data">
+              <div class="grid2">
+                <label>Nombre<input name="name" value="{{ p.name }}" required></label>
+                <label>Precio<input name="price" type="number" value="{{ p.price }}" required></label>
+              </div>
+              <div class="grid2">
+                <label>Referencia<input name="ref" value="{{ p.ref }}" required></label>
+                <label>Categoría
+                  <select name="category">
+                    <option value="Prendas" {% if p.category in ['Prendas','Ropa'] %}selected{% endif %}>Prendas</option>
+                    <option value="Zapatos" {% if p.category in ['Zapatos','Calzado'] %}selected{% endif %}>Zapatos</option>
+                    <option value="Hogar" {% if p.category=='Hogar' %}selected{% endif %}>Hogar</option>
+                    <option value="Variedades" {% if p.category=='Variedades' %}selected{% endif %}>Variedades</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid2">
+                <label>Tallas<input name="sizes" value="{{ p.sizes|join(', ') }}"></label>
+                <label>Colores<input name="colors" value="{{ p.colors|join(', ') }}"></label>
+              </div>
+              <label>Descripción<textarea name="description">{{ p.description }}</textarea></label>
+              <label>Cambiar foto principal (opcional)<input name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp"></label>
+              <input type="hidden" name="subtitle" value="{{ p.subtitle }}">
+              <div class="checks">
+                <label><input type="checkbox" name="active" {% if p.active %}checked{% endif %}> Publicado</label>
+                <label><input type="checkbox" name="featured" {% if p.featured %}checked{% endif %}> Novedad</label>
+              </div>
+              <div style="margin-top:12px"><button class="editBtn" style="background:#111;color:#fff">GUARDAR CAMBIOS</button></div>
+            </form>
+          </div>
         </article>
       {% endfor %}
       </div>
     {% else %}
-      <div class="emptyState">Todavía no hay productos guardados en Supabase.</div>
+      <div class="empty">Todavía no hay productos publicados.</div>
     {% endif %}
   </section>
 </main>
-</body></html>
+
+<script>
+function previewFiles(input, targetId){
+  const target=document.getElementById(targetId); target.innerHTML='';
+  [...input.files].slice(0,8).forEach(file=>{
+    if(!file.type.startsWith('image/')) return;
+    const img=document.createElement('img'); img.src=URL.createObjectURL(file); target.appendChild(img);
+  });
+}
+document.getElementById('coverInput')?.addEventListener('change',e=>previewFiles(e.target,'coverPreview'));
+document.getElementById('galleryInput')?.addEventListener('change',e=>previewFiles(e.target,'galleryPreview'));
+function toggleEdit(id){document.getElementById(id).classList.toggle('open')}
+</script>
+</body>
+</html>

@@ -22,7 +22,10 @@ async function loadProducts(){
 }
 function renderProducts(){
   const q=$("#searchInput").value.trim().toLowerCase();
-  const list=products.filter(p => (activeCat==="Todos"||p.category===activeCat) && `${p.name} ${p.subtitle} ${p.description}`.toLowerCase().includes(q));
+  const list=products.filter(p => (activeCat==="Todos" ||
+    p.category===activeCat ||
+    (activeCat==="Prendas" && p.category==="Ropa") ||
+    (activeCat==="Zapatos" && p.category==="Calzado")) && `${p.name} ${p.subtitle} ${p.description}`.toLowerCase().includes(q));
   $("#productGrid").innerHTML=list.map(p=>`
     <article class="productCard" onclick="openProduct(${p.id})">
       <div class="productImage">
