@@ -18,7 +18,21 @@ function colorHex(name){
 }
 async function loadProducts(){
   products = await fetch("/api/products").then(r=>r.json());
-  renderProducts(); renderCart();
+
+  // Limpia artículos guardados por versiones anteriores o productos ya eliminados.
+  const before = JSON.stringify(cart);
+  cart = (Array.isArray(cart) ? cart : []).filter(item => {
+    const exists = products.some(p => p.id === item.id);
+    const qtyOk = Number.isFinite(Number(item.qty)) && Number(item.qty) > 0;
+    return exists && qtyOk;
+  }).map(item => ({...item, qty: Math.min(9, Math.max(1, Number(item.qty)))}));
+
+  if (JSON.stringify(cart) !== before) {
+    localStorage.setItem("atelierCartV4", JSON.stringify(cart));
+  }
+
+  renderProducts();
+  renderCart();
 }
 function renderProducts(){
   const q=$("#searchInput").value.trim().toLowerCase();
@@ -125,8 +139,18 @@ $("#modalAdd").onclick=()=>{
 }
 function saveCart(){localStorage.setItem("atelierCartV4",JSON.stringify(cart));renderCart()}
 function renderCart(){
-  const count=cart.reduce((sum,x)=>sum+x.qty,0);
-  $("#cartBadge").textContent=count;
+  // Segunda validación por seguridad: nunca contar artículos que ya no existen.
+  const validIds = new Set(products.map(p=>p.id));
+  const cleaned = cart.filter(i=>validIds.has(i.id) && Number(i.qty)>0);
+  if(cleaned.length!==cart.length){
+    cart=cleaned;
+    localStorage.setItem("atelierCartV4",JSON.stringify(cart));
+  }
+
+  const count=cart.reduce((sum,x)=>sum+Number(x.qty||0),0);
+  const badge=$("#cartBadge");
+  badge.textContent=count;
+  badge.style.display=count>0?"inline-flex":"none";
   $("#stickyCountText").textContent=`${count} producto${count===1?"":"s"}`;
   const total=cart.reduce((sum,i)=>{const p=products.find(x=>x.id===i.id);return sum+(p?p.price*i.qty:0)},0);
   $("#stickyTotal").textContent=money(total);
